@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+<title>MOBILE FORTRESS</title>
+<meta name="description" content="Mobile Fortress — a premium roguelike action-strategy game. Command a colossal war machine across hostile wastelands." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="styles/main.css" />
+</head>
+<body>
+<div id="app">
+  <canvas id="game"></canvas>
+
+  <!-- ============ HUD ============ -->
+  <div id="hud" class="hidden">
+    <!-- Top-left: vitals -->
+    <div class="hud-panel vitals">
+      <div class="bar-row">
+        <span class="bar-label">HULL</span>
+        <div class="bar hull"><div class="bar-fill" id="hullFill"></div><span class="bar-text" id="hullText">100</span></div>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label">SHIELD</span>
+        <div class="bar shield"><div class="bar-fill" id="shieldFill"></div><span class="bar-text" id="shieldText">0</span></div>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label">POWER</span>
+        <div class="bar power"><div class="bar-fill" id="powerFill"></div><span class="bar-text" id="powerText">100</span></div>
+      </div>
+    </div>
+
+    <!-- Top-right: run info -->
+    <div class="hud-panel runinfo">
+      <div class="ri-biome" id="riBiome">DESERT</div>
+      <div class="ri-wave">WAVE <span id="riWave">1</span></div>
+      <div class="ri-scrap"><span class="scrap-icon">◆</span> <span id="riScrap">0</span></div>
+      <div class="ri-clock" id="riClock">00:00</div>
+    </div>
+
+    <!-- Wave progress -->
+    <div class="wave-progress"><div class="wave-progress-fill" id="waveProgressFill"></div></div>
+
+    <!-- Bottom-center: weapons -->
+    <div class="hud-panel weapons">
+      <div class="weapon-slot" id="slotPrimary">
+        <div class="ws-key">LMB</div>
+        <div class="ws-name" id="wsPrimaryName">CANNON</div>
+        <div class="ws-cd"><div class="ws-cd-fill" id="wsPrimaryCd"></div></div>
+      </div>
+      <div class="weapon-slot" id="slotSecondary">
+        <div class="ws-key">RMB</div>
+        <div class="ws-name" id="wsSecondaryName">—</div>
+        <div class="ws-cd"><div class="ws-cd-fill" id="wsSecondaryCd"></div></div>
+      </div>
+      <div class="weapon-slot ability" id="slotAbility">
+        <div class="ws-key">SPACE</div>
+        <div class="ws-name" id="wsAbilityName">OVERSHIELD</div>
+        <div class="ws-cd"><div class="ws-cd-fill" id="wsAbilityCd"></div></div>
+      </div>
+      <div class="weapon-slot ability" id="slotBoost">
+        <div class="ws-key">SHIFT</div>
+        <div class="ws-name">BOOST</div>
+        <div class="ws-cd"><div class="ws-cd-fill" id="wsBoostCd"></div></div>
+      </div>
+    </div>
+
+    <!-- Modules acquired -->
+    <div class="hud-panel modules" id="modulesPanel"></div>
+
+    <!-- Combo -->
+    <div class="combo" id="comboWrap"><span class="combo-x" id="comboX">x2</span><span class="combo-label">COMBO</span></div>
+
+    <!-- Boss bar -->
+    <div class="boss-bar hidden" id="bossBar">
+      <div class="boss-name" id="bossName">TITAN</div>
+      <div class="boss-hp"><div class="boss-hp-fill" id="bossHpFill"></div></div>
+      <div class="boss-phase" id="bossPhase"></div>
+    </div>
+
+    <!-- Banner (wave/biome announcements) -->
+    <div class="banner" id="banner"></div>
+    <!-- Toast (upgrades acquired etc.) -->
+    <div class="toast-stack" id="toastStack"></div>
+  </div>
+
+  <!-- ============ UPGRADE SELECTION ============ -->
+  <div id="upgradeScreen" class="overlay hidden">
+    <div class="upgrade-head">
+      <div class="upgrade-title" id="upgradeTitle">SELECT A MODULE</div>
+      <div class="upgrade-sub" id="upgradeSub">Your fortress evolves</div>
+    </div>
+    <div class="cards" id="upgradeCards"></div>
+    <div class="upgrade-foot" id="upgradeFoot">Click a card — or press 1 / 2 / 3</div>
+  </div>
+
+  <!-- ============ MAIN MENU ============ -->
+  <div id="menu" class="overlay">
+    <div class="menu-bg-grid"></div>
+    <div class="menu-title">
+      <div class="mt-main">MOBILE<span>FORTRESS</span></div>
+      <div class="mt-sub">ROGUELIKE · WAR MACHINE · WASTELAND</div>
+    </div>
+    <div class="menu-buttons">
+      <button class="btn btn-primary" id="btnPlay">DEPLOY</button>
+      <button class="btn" id="btnChassis">FORTRESS <span class="btn-tag" id="chassisTag">HEAVY</span></button>
+      <button class="btn" id="btnHangar">HANGAR &amp; UNLOCKS</button>
+      <button class="btn" id="btnHowto">HOW TO PLAY</button>
+    </div>
+    <div class="menu-meta">
+      <div class="meta-item"><span class="meta-label">CORES</span><span class="meta-val" id="metaCores">0</span></div>
+      <div class="meta-item"><span class="meta-label">BEST WAVE</span><span class="meta-val" id="metaBestWave">0</span></div>
+      <div class="meta-item"><span class="meta-label">RUNS</span><span class="meta-val" id="metaRuns">0</span></div>
+    </div>
+    <div class="menu-foot">v1.0 · a vertical slice prototype · WASD move · MOUSE aim</div>
+  </div>
+
+  <!-- ============ CHASSIS SELECT ============ -->
+  <div id="chassisScreen" class="overlay hidden">
+    <div class="panel-title">SELECT FORTRESS CHASSIS</div>
+    <div class="chassis-list" id="chassisList"></div>
+    <button class="btn btn-back" data-back="menu">◀ BACK</button>
+  </div>
+
+  <!-- ============ HANGAR / UNLOCKS ============ -->
+  <div id="hangarScreen" class="overlay hidden">
+    <div class="panel-title">HANGAR · PERMANENT UPGRADES</div>
+    <div class="panel-sub">Spend <span class="accent">CORES</span> earned from runs. Permanent across all future deployments.</div>
+    <div class="hangar-cores">CORES AVAILABLE: <span id="hangarCores">0</span></div>
+    <div class="hangar-list" id="hangarList"></div>
+    <button class="btn btn-back" data-back="menu">◀ BACK</button>
+  </div>
+
+  <!-- ============ HOW TO PLAY ============ -->
+  <div id="howtoScreen" class="overlay hidden">
+    <div class="panel-title">HOW TO PLAY</div>
+    <div class="howto-grid">
+      <div class="howto-col">
+        <h3>CONTROLS</h3>
+        <ul>
+          <li><b>W A S D</b> — Drive the fortress</li>
+          <li><b>MOUSE</b> — Aim the main turret</li>
+          <li><b>LEFT CLICK</b> — Fire primary weapon</li>
+          <li><b>RIGHT CLICK</b> — Fire secondary weapon</li>
+          <li><b>SPACE</b> — Defensive ability (overshield)</li>
+          <li><b>SHIFT</b> — Overdrive boost</li>
+          <li><b>TAB</b> — Tactical zoom-out</li>
+          <li><b>ESC / P</b> — Pause</li>
+        </ul>
+      </div>
+      <div class="howto-col">
+        <h3>THE LOOP</h3>
+        <ul>
+          <li>Survive escalating <b>waves</b> of hostiles.</li>
+          <li>Destroy enemies to earn <b>scrap</b>.</li>
+          <li>Between waves, bolt on new <b>modules</b> — every one physically appears on your fortress.</li>
+          <li>Stack upgrades into <b>absurd synergies</b>.</li>
+          <li>Clear the biome <b>boss</b>, roll to the next wasteland.</li>
+          <li>Earn <b>cores</b> to permanently upgrade.</li>
+        </ul>
+      </div>
+      <div class="howto-col">
+        <h3>TIPS</h3>
+        <ul>
+          <li>Keep <b>moving</b> — a stationary fortress is a dead fortress.</li>
+          <li>Watch your <b>POWER</b> — energy weapons and shields drain it.</li>
+          <li>Build a <b>theme</b>: go all-in on missiles, lasers, or drones.</li>
+          <li>Chain kills to build a <b>combo</b> multiplier on scrap.</li>
+          <li>Boss weak points glow — hit them during phase transitions.</li>
+        </ul>
+      </div>
+    </div>
+    <button class="btn btn-back" data-back="menu">◀ BACK</button>
+  </div>
+
+  <!-- ============ PAUSE ============ -->
+  <div id="pauseScreen" class="overlay hidden">
+    <div class="panel-title">PAUSED</div>
+    <div class="pause-stats" id="pauseStats"></div>
+    <div class="menu-buttons">
+      <button class="btn btn-primary" id="btnResume">RESUME</button>
+      <button class="btn" id="btnAbandon">ABANDON RUN</button>
+    </div>
+  </div>
+
+  <!-- ============ GAME OVER / VICTORY ============ -->
+  <div id="endScreen" class="overlay hidden">
+    <div class="end-title" id="endTitle">FORTRESS DESTROYED</div>
+    <div class="end-sub" id="endSub"></div>
+    <div class="end-stats" id="endStats"></div>
+    <div class="menu-buttons">
+      <button class="btn btn-primary" id="btnAgain">DEPLOY AGAIN</button>
+      <button class="btn" id="btnMenu">MAIN MENU</button>
+    </div>
+  </div>
+
+  <!-- Audio prompt -->
+  <div id="clickHint" class="click-hint hidden">CLICK TO ENABLE AUDIO</div>
+</div>
+
+<!-- ===================== SCRIPTS (ordered, modular) ===================== -->
+<script src="src/utils.js"></script>
+<script src="src/audio.js"></script>
+<script src="src/input.js"></script>
+<script src="src/camera.js"></script>
+<script src="src/particles.js"></script>
+<script src="src/data/weapons.js"></script>
+<script src="src/data/enemies.js"></script>
+<script src="src/data/upgrades.js"></script>
+<script src="src/data/biomes.js"></script>
+<script src="src/data/chassis.js"></script>
+<script src="src/projectiles.js"></script>
+<script src="src/weapons.js"></script>
+<script src="src/art.js"></script>
+<script src="src/fortress.js"></script>
+<script src="src/enemy.js"></script>
+<script src="src/director.js"></script>
+<script src="src/boss.js"></script>
+<script src="src/loot.js"></script>
+<script src="src/world.js"></script>
+<script src="src/upgrades.js"></script>
+<script src="src/save.js"></script>
+<script src="src/ui.js"></script>
+<script src="src/game.js"></script>
+<script src="src/main.js"></script>
+</body>
+</html>
