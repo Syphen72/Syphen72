@@ -6,7 +6,9 @@
 
 ---
 
-# 🛡️ MOBILE FORTRESS
+# 🛡️ DREADTREAD
+
+### *One fortress. A thousand guns. Zero brakes.*
 
 **A premium roguelike action‑strategy game — playable in your browser.**
 
