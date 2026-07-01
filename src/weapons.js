@@ -113,6 +113,14 @@
           explosive: mods.explosive, owner: f,
         });
       }
+      // heavy cannon signature: displaced dust, shockwave, smoke, light bloom
+      if (this.key === "cannon") {
+        const mx = origin.x + Math.cos(aim) * d.barrelLen, my = origin.y + Math.sin(aim) * d.barrelLen;
+        game.particles.dust(mx, my, 6, "rgba(170,150,115,1)");
+        game.particles.ring(mx, my, 48, "#ffe0a0", 0.3, 4);
+        game.particles.smoke(mx, my, 3, 10, "rgba(64,64,70,0.9)", -4);
+        game.lights.flash(mx, my, 100, "#ffd0a0", 0.14);
+      }
       game.audio.play(d.sfx, { vol: 0.7 });
       f.applyRecoil(aim, d.recoil);
       game.camera.addShake(d.shake);
@@ -130,8 +138,14 @@
         color: d.color, glow: 22, pierce: 99, trail: 0.9, owner: f,
         burn: f.stats.burn, chain: f.stats.chain,
       });
-      // railgun beam flash line
+      // railgun signature: magnetic distortion ring + electric arcing along the rails
       game.particles.ring(mx, my, 40, "#7be3ff", 0.3, 4);
+      game.particles.ring(mx, my, 22, "#dffaff", 0.22, 2);
+      for (let i = 0; i < 3; i++) {
+        const a = aim + U.rand(-0.5, 0.5);
+        game.particles.lightning(origin.x, origin.y, origin.x + Math.cos(a) * d.barrelLen, origin.y + Math.sin(a) * d.barrelLen, "#7be3ff", 0.1);
+      }
+      game.lights.flash(mx, my, 120, "#7be3ff", 0.2);
       game.audio.play(d.sfx, { vol: 0.9 });
       f.applyRecoil(aim, d.recoil);
       game.camera.addShake(d.shake);

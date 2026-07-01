@@ -27,6 +27,11 @@
         chassisUnlocked: { heavy: true, scout: true },
         stats: { runs: 0, bestWave: 0, kills: 0, bossKills: 0, bestBiome: 0 },
         selectedChassis: "heavy",
+        settings: {
+          master: 0.9, sfx: 1.0, music: 0.8,
+          shake: 1.0, flashes: true, damageNumbers: true,
+          highContrast: false, colorblind: "off", uiScale: 1.0,
+        },
       };
     }
     _load() {
@@ -43,6 +48,9 @@
 
     get cores() { return this.data.cores; }
     addCores(n) { this.data.cores += n; this.save(); }
+
+    get settings() { return this.data.settings; }
+    setSetting(k, v) { this.data.settings[k] = v; this.save(); }
 
     hangarLevel(id) { return this.data.hangar[id] || 0; }
     hangarDef(id) { return HANGAR.find((h) => h.id === id); }

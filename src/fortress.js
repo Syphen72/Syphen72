@@ -62,6 +62,14 @@
       this.hitFlash = 0;
       this.recoilX = 0; this.recoilY = 0;
       this.treadPhase = 0;
+      // chassis physics feel
+      this.prevVx = 0; this.prevVy = 0;
+      this.susp = 0; this.suspV = 0;   // suspension pitch spring
+      this.roll = 0;                    // lateral bank
+      this.stretch = 0;                 // squash/stretch along travel
+      this.rattle = 0;                  // high-freq vibration amount
+      this.turretRecoil = 0;            // extra kick shared to camera
+      this._exhaustT = 0;
 
       this.weapons = [];
       this.mountMap = [];      // parallel to weapons: mount offset
@@ -197,6 +205,33 @@
       this.recoilX = U.damp(this.recoilX, 0, 12, dt);
       this.recoilY = U.damp(this.recoilY, 0, 12, dt);
 
+      // ---- chassis physics feel: suspension, bank, squash, rattle, exhaust ----
+      const invDt = dt > 0 ? 1 / dt : 0;
+      const ax = (this.vx - this.prevVx) * invDt;
+      const ay = (this.vy - this.prevVy) * invDt;
+      this.prevVx = this.vx; this.prevVy = this.vy;
+      const fxx = Math.cos(this.angle), fyy = Math.sin(this.angle);
+      const fwdAccel = (ax * fxx + ay * fyy);
+      const latAccel = (ax * -fyy + ay * fxx);
+      // suspension spring (pitches back under acceleration, forward under braking)
+      const suspTarget = U.clamp(-fwdAccel * 0.006, -6, 6);
+      this.suspV += (suspTarget - this.susp) * 60 * dt;
+      this.suspV *= Math.pow(0.02, dt);
+      this.susp += this.suspV * dt;
+      // bank into lateral acceleration
+      this.roll = U.damp(this.roll, U.clamp(latAccel * 0.00035, -0.12, 0.12), 8, dt);
+      // stretch subtly along travel with speed
+      this.stretch = U.damp(this.stretch, U.clamp(sp / maxSpeed * 0.06, 0, 0.08), 6, dt);
+      // rattle grows with speed & boost
+      this.rattle = U.damp(this.rattle, (sp / (maxSpeed || 1)) * (boosting ? 1.8 : 1) * 0.9, 8, dt);
+      // engine exhaust puffs from the reactor stack
+      this._exhaustT -= dt;
+      if (sp > 40 && this._exhaustT <= 0) {
+        this._exhaustT = boosting ? 0.03 : 0.09;
+        const ex = this.x - fxx * 30, ey = this.y - fyy * 30;
+        this.game.particles.smoke(ex, ey, 1, boosting ? 7 : 5, boosting ? "rgba(120,200,255,0.9)" : "rgba(70,74,82,0.9)", -14);
+      }
+
       // body faces movement direction (smoothed), else keep
       if (sp > 12) {
         const target = Math.atan2(this.vy, this.vx);
@@ -303,10 +338,18 @@
       ctx.beginPath(); ctx.ellipse(this.x, this.y + 10, 42, 26, 0, 0, U.TAU); ctx.fill();
       ctx.restore();
 
+      // shared render offsets so mounted guns bounce/rattle with the hull
+      const rat = this.rattle || 0;
+      const jx = rat ? U.rand(-rat, rat) : 0;
+      const jy = (rat ? U.rand(-rat, rat) : 0) - this.susp;
+      this._rjx = jx; this._rjy = jy;
+
       // body
       ctx.save();
-      ctx.translate(cx, cy);
+      ctx.translate(cx + jx, cy + jy);
       ctx.rotate(this.angle);
+      // bank + squash/stretch in local space (x = forward)
+      ctx.transform(1 + this.stretch, 0, this.roll, 1 - this.stretch * 0.5, 0, 0);
       bodyDraw(ctx, this, this.treadPhase);
       ctx.restore();
 
@@ -316,12 +359,12 @@
         const mount = this.mountMap[i];
         const mw = this._mountWorld(mount);
         const aim = w.trigger === "auto" ? this.angle : this.turret;
-        MF.drawWeaponMount(ctx, w, mw.x, mw.y, aim, mount.main);
+        MF.drawWeaponMount(ctx, w, mw.x + jx, mw.y + jy, aim, mount.main);
       }
       // auto turrets
       for (const t of this.autoTurrets) {
         const ow = this._mountWorld(t.off);
-        MF.drawAutoTurret(ctx, ow.x, ow.y, t.angle);
+        MF.drawAutoTurret(ctx, ow.x + jx, ow.y + jy, t.angle);
       }
 
       // beam/flame overlays

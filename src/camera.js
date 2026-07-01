@@ -20,13 +20,14 @@
       this.ttilt = 0;
       this.w = 0; this.h = 0;
       this.dpr = 1;
+      this.shakeScale = 1;   // set from accessibility settings
     }
 
     resize(w, h, dpr) { this.w = w; this.h = h; this.dpr = dpr; }
 
     follow(x, y) { this.tx = x; this.ty = y; }
     setZoom(z) { this.tzoom = z; }
-    addShake(m) { this.shake = Math.min(this.shake + m, 46); }
+    addShake(m) { this.shake = Math.min(this.shake + m * this.shakeScale, 46); }
 
     update(dt, lookX, lookY, moveMag) {
       // Lead the camera slightly toward aim direction

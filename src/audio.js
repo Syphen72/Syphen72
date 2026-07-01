@@ -270,7 +270,7 @@
       this.musicRoot = biomeRoot || 55; // A1
       this.musicBus.gain.cancelScheduledValues(this.t);
       this.musicBus.gain.setValueAtTime(this.musicBus.gain.value, this.t);
-      this.musicBus.gain.linearRampToValueAtTime(0.34, this.t + 2.5);
+      this.musicBus.gain.linearRampToValueAtTime(0.34 * (this._musicBaseScale == null ? 1 : this._musicBaseScale), this.t + 2.5);
       this._step = 0;
       const bpm = 96;
       const beat = 60 / bpm / 2; // eighth notes
@@ -347,11 +347,18 @@
     }
     setIntensity(v) { this.intensity = U.clamp(v, 0, 1); }
     setVolume(v) { this.volume = v; if (this.master) this.master.gain.value = v; }
+    applyMix(master, sfx, music) {
+      this.volume = master;
+      this._sfxScale = sfx; this._musicScale = music;
+      if (this.master) this.master.gain.value = master;
+      if (this.sfxBus) this.sfxBus.gain.value = 0.9 * sfx;
+      if (this.musicBus) this._musicBaseScale = music;
+    }
     duckForBoss() {
       if (this.musicBus) {
         this.musicBus.gain.cancelScheduledValues(this.t);
         this.musicBus.gain.setValueAtTime(this.musicBus.gain.value, this.t);
-        this.musicBus.gain.linearRampToValueAtTime(0.42, this.t + 1.5);
+        this.musicBus.gain.linearRampToValueAtTime(0.42 * (this._musicBaseScale == null ? 1 : this._musicBaseScale), this.t + 1.5);
       }
     }
   }

@@ -32,6 +32,7 @@
 
     showMenu() {
       this.hideAllOverlays();
+      this.setLetterbox(false);
       this.showHUD(false);
       this.el.menu.classList.remove("hidden");
       this.game.state = MF.STATE.MENU;
@@ -138,6 +139,10 @@
     updateBossBar(boss) { this.el.bossHpFill.style.width = U.clamp(boss.hp / boss.maxHp, 0, 1) * 100 + "%"; }
     bossPhase(txt) { this.el.bossPhase.textContent = txt; }
     hideBossBar() { this.el.bossBar.classList.add("hidden"); }
+    setLetterbox(on) {
+      document.getElementById("letterTop").classList.toggle("show", on);
+      document.getElementById("letterBot").classList.toggle("show", on);
+    }
 
     // ============== upgrade cards ==============
     showUpgrades(choices) {
@@ -268,7 +273,77 @@
       this.el.hangarScreen.classList.remove("hidden");
     }
 
-    showHowto() { this.hideAllOverlays(); this.el.howtoScreen.classList.remove("hidden"); }
+    showHowto() { this.hideAllOverlays(); document.getElementById("howtoScreen").classList.remove("hidden"); }
+
+    // ============== settings ==============
+    showSettings(from) {
+      this._settingsReturn = from || "menu";
+      const g = this.game, s = g.save.settings;
+      const body = document.getElementById("settingsBody");
+      body.innerHTML = "";
+
+      const slider = (key, label, min, max, step, fmt) => {
+        const row = document.createElement("div"); row.className = "set-row";
+        const val = s[key];
+        row.innerHTML = `<label>${label}</label>
+          <div class="set-ctrl"><input type="range" min="${min}" max="${max}" step="${step}" value="${val}">
+          <span class="set-val">${fmt(val)}</span></div>`;
+        const inp = row.querySelector("input"), out = row.querySelector(".set-val");
+        inp.addEventListener("input", () => {
+          const v = parseFloat(inp.value);
+          out.textContent = fmt(v); g.save.setSetting(key, v); g.applySettings();
+        });
+        inp.addEventListener("change", () => g.audio.play("ui", { vol: 0.3 }));
+        body.appendChild(row);
+      };
+      const toggle = (key, label, sub) => {
+        const row = document.createElement("div"); row.className = "set-row";
+        row.innerHTML = `<label>${label}${sub ? `<span class="set-sub">${sub}</span>` : ""}</label>
+          <button class="toggle ${s[key] ? "on" : ""}" role="switch"><span class="toggle-knob"></span></button>`;
+        const btn = row.querySelector(".toggle");
+        btn.addEventListener("click", () => {
+          const v = !s[key]; g.save.setSetting(key, v); btn.classList.toggle("on", v);
+          g.applySettings(); g.audio.play("ui", { vol: 0.4 });
+        });
+        body.appendChild(row);
+      };
+      const options = (key, label, opts) => {
+        const row = document.createElement("div"); row.className = "set-row";
+        let btns = opts.map((o) => `<button class="seg ${s[key] === o.v ? "on" : ""}" data-v="${o.v}">${o.l}</button>`).join("");
+        row.innerHTML = `<label>${label}</label><div class="seg-group">${btns}</div>`;
+        row.querySelectorAll(".seg").forEach((b) => b.addEventListener("click", () => {
+          g.save.setSetting(key, b.dataset.v);
+          row.querySelectorAll(".seg").forEach((x) => x.classList.remove("on"));
+          b.classList.add("on"); g.applySettings(); g.audio.play("ui", { vol: 0.4 });
+        }));
+        body.appendChild(row);
+      };
+      const header = (t) => { const h = document.createElement("div"); h.className = "set-head"; h.textContent = t; body.appendChild(h); };
+
+      const pct = (v) => Math.round(v * 100) + "%";
+      header("AUDIO");
+      slider("master", "Master Volume", 0, 1, 0.05, pct);
+      slider("sfx", "Sound Effects", 0, 1, 0.05, pct);
+      slider("music", "Music", 0, 1, 0.05, pct);
+      header("VISUAL");
+      slider("shake", "Screen Shake", 0, 1.5, 0.05, pct);
+      toggle("flashes", "Screen Flashes", "Muzzle / damage full-screen flashes");
+      toggle("damageNumbers", "Damage Numbers", "Show floating hit numbers");
+      header("ACCESSIBILITY");
+      toggle("highContrast", "High Contrast UI", "Boost panel & text contrast");
+      options("colorblind", "Colorblind Aid", [
+        { v: "off", l: "Off" }, { v: "outline", l: "Outlines" },
+      ]);
+      slider("uiScale", "UI Scale", 0.85, 1.25, 0.05, pct);
+
+      this.hideAllOverlays();
+      document.getElementById("settingsScreen").classList.remove("hidden");
+    }
+    closeSettings() {
+      document.getElementById("settingsScreen").classList.add("hidden");
+      if (this._settingsReturn === "pause") { this.el.pauseScreen.classList.remove("hidden"); }
+      else this.showMenu();
+    }
   }
 
   MF.UI = UI;

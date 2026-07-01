@@ -256,6 +256,12 @@
       ctx.scale(scale, scale);
       const art = MF.EnemyArt[this.def.shape] || MF.EnemyArt.dart;
       art(ctx, this);
+      // colorblind aid: hostile outline ring so enemies read regardless of hue
+      if (this.game.settings.colorblind === "outline") {
+        ctx.beginPath(); ctx.arc(0, 0, this.size + 2.5, 0, U.TAU);
+        ctx.strokeStyle = "#ff2b2b"; ctx.lineWidth = 2; ctx.setLineDash([4, 3]);
+        ctx.stroke(); ctx.setLineDash([]);
+      }
       ctx.restore();
 
       // shielded aura

@@ -20,11 +20,13 @@
       this.input = new MF.Input(this.canvas);
       this.camera = new MF.Camera();
       this.particles = new MF.Particles();
+      this.lights = new MF.Lights(this);
       this.projectiles = new MF.Projectiles(this);
       this.world = new MF.World(this);
       this.director = new MF.Director(this);
       this.upgrades = new MF.UpgradeManager(this);
       this.save = new MF.Save();
+      this.settings = this.save.settings;
       this.ui = new MF.UI(this);
 
       this.state = STATE.MENU;
@@ -71,6 +73,7 @@
     // ================= Run lifecycle =================
     startRun(chassisId) {
       this.audio.resume();
+      this.applySettings();
       const chassis = MF.CHASSIS.find((c) => c.id === chassisId) || MF.CHASSIS[0];
       const meta = this.save.metaBonuses();
       this.fortress = new MF.Fortress(this, chassis);
@@ -152,11 +155,12 @@
       const type = this.world.biome.boss;
       this.boss = new MF.Boss(this, biomeIndex, wave, type);
       this.pendingBoss = false;
+      this.ui.setLetterbox(true);
+      this._bossCineT = 2.2;   // cinematic intro focus timer
       this.ui.banner("WARNING", "BOSS APPROACHING", 2.2);
-      this.ui.showBossBar(this.boss);
       this.audio.duckForBoss();
       this.audio.setIntensity(1);
-      this.camera.setZoom(this.camera.baseZoom * 0.86);
+      this.camera.addShake(6);
     }
     onBossPhase(boss, phase) {
       this.ui.bossPhase("PHASE " + phase + " — WEAK POINT EXPOSED");
@@ -179,7 +183,10 @@
     _finishBoss() {
       this.boss = null;
       this.ui.hideBossBar();
+      this.ui.setLetterbox(false);
       this.camera.setZoom(this.camera.baseZoom);
+      // conquering every biome once = a full victory
+      if (this.stats.bossKills >= MF.BIOMES.length) { this.endRun(true); return; }
       this.director.advanceBiome();
       this.stats.biome = this.director.biomeIndex;
       // transition to next biome
@@ -274,6 +281,7 @@
     callOrbital(x, y, dmg, r, owner) { this.orbitals.push(new MF.Orbital(this, x, y, dmg, r, owner)); }
 
     spawnDamageText(x, y, dmg, crit) {
+      if (!this.settings.damageNumbers && !crit) return;
       dmg = Math.round(dmg);
       if (dmg < 1) return;
       const color = crit ? "#ffd24a" : "#ffffff";
@@ -305,7 +313,7 @@
     }
 
     onFortressHit(dmg) {
-      this.ui.hurtFlash();
+      if (this.settings.flashes) this.ui.hurtFlash();
       this.camera.addShake(U.clamp(dmg / 6, 1, 6));
       this.audio.play("hurt", { vol: U.clamp(dmg / 40, 0.2, 0.7) });
       this.combo = 0; this.ui.hideCombo();
@@ -321,12 +329,25 @@
 
     endRun(victory) {
       this.state = STATE.OVER;
+      this.boss = null;
+      this.ui.setLetterbox(false);
+      this.ui.hideBossBar();
       const cores = (this.pendingCores || 0) + Math.floor(this.stats.scrapEarned / 30) + this.director.globalWave * 2;
       this.pendingCores = 0;
       this.save.addCores(cores);
       this.save.recordRun({ wave: this.director.globalWave, kills: this.stats.kills, bossKills: this.stats.bossKills, biome: this.director.biomeIndex });
       this.ui.showEnd(victory, { ...this.stats, cores, wave: this.director.globalWave, scrap: this.scrap, time: this.runTime });
       this.targetTimeScale = 1;
+    }
+
+    applySettings() {
+      const s = this.settings = this.save.settings;
+      this.audio.applyMix(s.master, s.sfx, s.music);
+      this.camera.shakeScale = s.shake;
+      this.lights.flashesEnabled = s.flashes;
+      document.body.classList.toggle("high-contrast", !!s.highContrast);
+      document.body.setAttribute("data-cb", s.colorblind || "off");
+      document.documentElement.style.setProperty("--ui-scale", s.uiScale || 1);
     }
 
     pause() { if (this.state !== STATE.PLAYING) return; this.state = STATE.PAUSED; this.ui.showPause(); }
@@ -356,6 +377,8 @@
     update(sdt, rawDt) {
       const f = this.fortress;
       this.runTime += sdt;
+      this.lights.begin();
+      this.lights.update(rawDt);
 
       // wave scheduling
       if (this._nextWaveTimer != null) {
@@ -412,12 +435,21 @@
       const aimx = (this.input.mouse.x - f.x), aimy = (this.input.mouse.y - f.y);
       const al = Math.hypot(aimx, aimy) || 1;
       const moveMag = Math.hypot(f.vx, f.vy) / (f.stats.moveSpeed || 200);
-      // TAB tactical zoom
+      // TAB tactical zoom + boss cinematic focus
       const tab = this.input.key("tab");
-      const targetZoom = this.camera.baseZoom * (tab ? 0.62 : (this.boss ? 0.86 : 1));
-      this.camera.setZoom(targetZoom);
-      this.camera.follow(f.x, f.y);
-      this.camera.update(rawDt, aimx / al, aimy / al, moveMag);
+      if (this._bossCineT > 0 && this.boss) {
+        this._bossCineT -= rawDt;
+        const bx = (f.x + this.boss.x) / 2, by = (f.y + this.boss.y) / 2;
+        this.camera.follow(bx, by);
+        this.camera.setZoom(this.camera.baseZoom * 1.16);
+        this.camera.update(rawDt, 0, 0, 0);
+        if (this._bossCineT <= 0) { this.ui.showBossBar(this.boss); this.ui.banner(this.boss.name, "◆ ELITE THREAT ◆", 1.8); }
+      } else {
+        const targetZoom = this.camera.baseZoom * (tab ? 0.62 : (this.boss ? 0.86 : 1));
+        this.camera.setZoom(targetZoom);
+        this.camera.follow(f.x, f.y);
+        this.camera.update(rawDt, aimx / al, aimy / al, moveMag);
+      }
 
       // update mouse world position (post-camera)
       const mw = this.camera.screenToWorld(this.input.mouse.sx, this.input.mouse.sy);
@@ -470,7 +502,11 @@
       // boss (on top of small enemies)
       if (this.boss) this.boss.render(ctx);
 
-      // top particles (sparks, flashes, fire, glow, rings)
+      // dynamic light layer (additive) — illuminates terrain, hull & smoke
+      this._collectLights();
+      this.lights.render(ctx, cam);
+
+      // top particles (sparks, flashes, fire, glow, rings) over the light
       this.particles.render(ctx, cam, 2, 2);
       this.particles.render(ctx, cam, 4, 5);
 
@@ -488,6 +524,41 @@
 
       // vignette
       this._vignette(ctx);
+    }
+
+    _collectLights() {
+      const L = this.lights, f = this.fortress;
+      if (!f) return;
+      const t = performance.now() / 1000;
+      // reactor core glow at rear of hull
+      const rc = Math.cos(f.angle), rs = Math.sin(f.angle);
+      const tier = f.visual.reactorTier;
+      const rx = f.x - rc * 30, ry = f.y - rs * 30;
+      L.add(rx, ry, 70 + tier * 16, this.world.biome.accent, 0.5 + Math.sin(t * 3) * 0.08);
+      // engine exhaust light while boosting
+      if (f.boostT > 0) L.add(rx, ry, 120, "#7be3ff", 0.8);
+      if (f.overshield > 0) L.add(f.x, f.y, f.radius + 60, "#7be3ff", 0.5);
+      // energy projectiles cast light
+      const pa = this.projectiles.pool.active;
+      for (let i = 0; i < pa.length; i++) {
+        const p = pa[i];
+        if (p.glow >= 10) L.add(p.x, p.y - (p.lob ? p.z : 0), 26 + p.radius * 3, p.color, 0.4);
+      }
+      // active beams
+      for (const w of f.weapons) {
+        if (w.def && w.def.beam && w.beamLen > 4) {
+          L.add(w._beamHitX, w._beamHitY, 60, w.def.color, 0.7);
+          L.add(w._beamOX, w._beamOY, 40, w.def.color, 0.5);
+        }
+      }
+      // drones
+      for (const d of this.drones) L.add(d.x, d.y, 22, "#7be3ff", 0.35);
+      // orbitals
+      for (const o of this.orbitals) L.add(o.x, o.y, o.radius * 0.8, "#c07bff", 0.5);
+      // boss core
+      if (this.boss && !this.boss.dead && this.boss.coreOpen > 0.2) {
+        L.add(this.boss.x, this.boss.y, this.boss.size * 1.6, this.boss.accent, 0.6 * this.boss.coreOpen);
+      }
     }
 
     _vignette(ctx) {

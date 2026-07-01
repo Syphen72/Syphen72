@@ -100,6 +100,7 @@
         color: color || "#fff3c0", glow: 20, layer: 4,
       });
       this.spark(x, y, dir, 0.5, (3 * scale) | 0, 260 * scale, color || "#ffd07a", 2);
+      const g = MF.game; if (g && g.lights) g.lights.flash(x, y, 70 * scale, color || "#ffe0a0", 0.09);
     }
     glow(x, y, size, color, life) {
       this._emit({ type: T.GLOW, x, y, size, size2: 0, life: life || 0.3, color, glow: 0, layer: 4 });
@@ -118,22 +119,36 @@
       }
     }
 
-    // Composite: explosion
+    // Composite: explosion — layered core flash, shockwave, fire, smoke, debris
     explosion(x, y, radius, colorCore, colorSmoke) {
       colorCore = colorCore || "#ffb347";
-      this.glow(x, y, radius * 1.6, "#fff2c0", 0.18);
-      this.ring(x, y, radius * 1.8, "#ffd08a", 0.5, 4);
-      this.fire(x, y, (radius / 3) | 0, radius * 0.4, colorCore);
-      this.spark(x, y, 0, Math.PI, (radius / 4) | 0, radius * 7, "#ffd07a", 2.4);
-      this.smoke(x, y, (radius / 5) | 0, radius * 0.5, colorSmoke || "#2a2d33", -20);
-      this.debris(x, y, (radius / 6) | 0, "#4a4f58", radius * 5);
+      // white-hot core flash
+      this.glow(x, y, radius * 1.7, "#fff6d8", 0.14);
+      this.glow(x, y, radius * 1.0, "#ffffff", 0.09);
+      // double shockwave ring (fast thin + slow thick)
+      this.ring(x, y, radius * 2.1, "#ffe0a0", 0.42, 5);
+      this.ring(x, y, radius * 1.3, "#fff2c0", 0.26, 3);
+      // rolling fireball
+      this.fire(x, y, Math.max(3, (radius / 2.6) | 0), radius * 0.45, colorCore);
+      // spark shower
+      this.spark(x, y, 0, Math.PI, Math.max(4, (radius / 3.2) | 0), radius * 8, "#ffe08a", 2.6);
+      // billowing smoke that lingers
+      this.smoke(x, y, Math.max(3, (radius / 4) | 0), radius * 0.55, colorSmoke || "#22252b", -22);
+      // debris chunks
+      this.debris(x, y, Math.max(3, (radius / 5) | 0), "#4a4f58", radius * 6);
+      // light bloom onto the world
+      const g = MF.game;
+      if (g && g.lights) { g.lights.flash(x, y, radius * 3.4, "#ffd0a0", 0.28); }
     }
 
     lightning(x1, y1, x2, y2, color, life, branch) {
+      color = color || "#9fe0ff";
       this.lightnings.push({
-        x1, y1, x2, y2, color: color || "#9fe0ff", life: life || 0.14, maxLife: life || 0.14,
+        x1, y1, x2, y2, color, life: life || 0.14, maxLife: life || 0.14,
         seed: Math.random() * 1000, branch: branch !== false,
       });
+      const g = MF.game;
+      if (g && g.lights) { g.lights.flash(x2, y2, 60, color, 0.14); g.lights.flash(x1, y1, 40, color, 0.1); }
     }
 
     text(x, y, str, color, size, opt) {

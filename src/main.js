@@ -8,12 +8,14 @@
   window.addEventListener("DOMContentLoaded", () => {
     const game = new MF.Game();
     MF.game = game;
+    game.applySettings();
 
     // ---- audio unlock on first interaction ----
     const hint = $("clickHint");
     hint.classList.remove("hidden");
     const unlock = () => {
       game.audio.resume();
+      game.applySettings();
       hint.classList.add("hidden");
       window.removeEventListener("pointerdown", unlock);
       window.removeEventListener("keydown", unlock);
@@ -28,12 +30,17 @@
     click($("btnChassis"), () => game.ui.showChassis());
     click($("btnHangar"), () => game.ui.showHangar());
     click($("btnHowto"), () => game.ui.showHowto());
+    click($("btnSettings"), () => game.ui.showSettings("menu"));
+
+    // ---- settings ----
+    click($("btnSettingsBack"), () => game.ui.closeSettings());
 
     document.querySelectorAll("[data-back]").forEach((b) =>
       click(b, () => game.ui.showMenu()));
 
     // ---- pause ----
     click($("btnResume"), () => game.resume());
+    click($("btnPauseSettings"), () => { game.ui.hidePause(); game.ui.showSettings("pause"); });
     click($("btnAbandon"), () => { game.ui.hidePause(); game.abandon(); });
 
     // ---- end ----

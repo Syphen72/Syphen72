@@ -31,18 +31,37 @@
       const rng = U.makeRng(this.seed);
       this.props.length = 0;
       const R = this.game.worldRadius;
-      const n = 120;
+      // scattered ground clutter (rocks, craters, cracks, small wreckage)
+      const n = 150;
       for (let i = 0; i < n; i++) {
         const a = rng() * U.TAU, r = Math.sqrt(rng()) * R;
         const x = Math.cos(a) * r, y = Math.sin(a) * r;
-        // keep spawn center clear
         if (Math.hypot(x, y) < 160) continue;
+        const roll = rng();
+        let kind = "rock";
+        if (roll > 0.82) kind = "crater";
+        else if (roll > 0.72) kind = "wreck";
+        else if (roll > 0.55) kind = "detail";
         this.props.push({
           x, y, r: rng.range(12, 46), rot: rng() * U.TAU,
-          kind: rng() < 0.7 ? "rock" : "detail", shade: rng.range(0.7, 1.15),
-          verts: 5 + (rng() * 3 | 0),
+          kind, shade: rng.range(0.7, 1.15), verts: 5 + (rng() * 3 | 0),
+          hue: rng(), layer: 0,
         });
       }
+      // sparse large background structures — factories, towers, gantries, convoys
+      const bigN = 16;
+      for (let i = 0; i < bigN; i++) {
+        const a = rng() * U.TAU, r = 420 + Math.sqrt(rng()) * (R - 420);
+        const x = Math.cos(a) * r, y = Math.sin(a) * r;
+        const t = rng();
+        const kind = t > 0.66 ? "structure" : (t > 0.33 ? "convoy" : "gantry");
+        this.props.push({
+          x, y, r: rng.range(60, 130), rot: rng() * U.TAU, kind,
+          shade: rng.range(0.75, 1.0), verts: 0, hue: rng(), layer: -1,
+        });
+      }
+      // sort so big background pieces draw first
+      this.props.sort((a, b) => a.layer - b.layer);
     }
 
     _initAmbient() {
@@ -195,8 +214,56 @@
       ctx.translate(p.x, p.y); ctx.rotate(p.rot);
       // shadow
       ctx.globalAlpha = 0.25; ctx.fillStyle = "#000";
-      ctx.beginPath(); ctx.ellipse(3, p.r * 0.3, p.r * 0.9, p.r * 0.4, 0, 0, U.TAU); ctx.fill();
+      if (p.kind !== "crater") { ctx.beginPath(); ctx.ellipse(3, p.r * 0.3, p.r * 0.9, p.r * 0.4, 0, 0, U.TAU); ctx.fill(); }
       ctx.globalAlpha = 1;
+      if (p.kind === "crater") {
+        // scorched impact crater (a decal that recedes into the ground)
+        const rg = ctx.createRadialGradient(0, 0, p.r * 0.2, 0, 0, p.r);
+        rg.addColorStop(0, "rgba(0,0,0,0.55)");
+        rg.addColorStop(0.7, "rgba(0,0,0,0.28)");
+        rg.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = rg; ctx.beginPath(); ctx.ellipse(0, 0, p.r, p.r * 0.75, 0, 0, U.TAU); ctx.fill();
+        ctx.strokeStyle = U.rgba(U.hex2rgb(b.rockEdge), 0.25); ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.ellipse(0, 0, p.r * 0.6, p.r * 0.45, 0, 0, U.TAU); ctx.stroke();
+        ctx.restore(); return;
+      }
+      if (p.kind === "wreck") {
+        // burnt-out hull husk
+        ctx.fillStyle = U.rgba(U.shade(U.hex2rgb(b.rock), 0.7), 1);
+        U.roundRect(ctx, -p.r * 0.6, -p.r * 0.4, p.r * 1.2, p.r * 0.8, 3); ctx.fill();
+        ctx.strokeStyle = "#12151b"; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = "#0c0f14";
+        ctx.fillRect(-p.r * 0.2, -p.r * 0.28, p.r * 0.5, p.r * 0.56);
+        // broken track
+        ctx.fillStyle = "#15181f"; ctx.fillRect(-p.r * 0.7, -p.r * 0.55, p.r * 1.4, p.r * 0.16);
+        ctx.restore(); return;
+      }
+      if (p.kind === "structure") {
+        this._drawStructure(ctx, p, b); ctx.restore(); return;
+      }
+      if (p.kind === "convoy") {
+        // a line of destroyed transports
+        const n = 3;
+        for (let i = 0; i < n; i++) {
+          ctx.save(); ctx.translate((i - 1) * p.r * 0.8, 0);
+          ctx.fillStyle = U.rgba(U.shade(U.hex2rgb(b.rock), 0.75 - i * 0.05), 1);
+          U.roundRect(ctx, -p.r * 0.32, -p.r * 0.22, p.r * 0.64, p.r * 0.44, 3); ctx.fill();
+          ctx.strokeStyle = "#12151b"; ctx.lineWidth = 2; ctx.stroke();
+          ctx.fillStyle = "#0c0f14"; ctx.fillRect(-p.r * 0.1, -p.r * 0.14, p.r * 0.28, p.r * 0.28);
+          ctx.restore();
+        }
+        ctx.restore(); return;
+      }
+      if (p.kind === "gantry") {
+        // industrial gantry / pipeline
+        ctx.strokeStyle = U.rgba(U.shade(U.hex2rgb(b.rockEdge), 0.9), 1); ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.moveTo(-p.r, -p.r * 0.2); ctx.lineTo(p.r, -p.r * 0.2); ctx.stroke();
+        ctx.lineWidth = 3;
+        for (let i = -2; i <= 2; i++) { ctx.beginPath(); ctx.moveTo(i * p.r * 0.4, -p.r * 0.2); ctx.lineTo(i * p.r * 0.4, p.r * 0.3); ctx.stroke(); }
+        ctx.strokeStyle = U.rgba(U.hex2rgb(b.accent), 0.2); ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(-p.r, p.r * 0.05); ctx.lineTo(p.r, p.r * 0.05); ctx.stroke();
+        ctx.restore(); return;
+      }
       if (p.kind === "rock") {
         ctx.beginPath();
         for (let i = 0; i <= p.verts; i++) {
@@ -221,6 +288,29 @@
         ctx.stroke();
       }
       ctx.restore();
+    }
+
+    _drawStructure(ctx, p, b) {
+      const s = p.r;
+      // main block
+      ctx.fillStyle = U.rgba(U.shade(U.hex2rgb(b.rock), 0.62 * p.shade), 1);
+      U.roundRect(ctx, -s * 0.6, -s * 0.5, s * 1.2, s, 4); ctx.fill();
+      ctx.strokeStyle = U.rgba(U.shade(U.hex2rgb(b.rockEdge), 0.7), 1); ctx.lineWidth = 2; ctx.stroke();
+      // stepped roofline
+      ctx.fillStyle = U.rgba(U.shade(U.hex2rgb(b.rock), 0.5), 1);
+      U.roundRect(ctx, -s * 0.5, -s * 0.72, s * 0.5, s * 0.3, 2); ctx.fill();
+      // chimneys
+      ctx.fillStyle = U.rgba(U.shade(U.hex2rgb(b.rock), 0.45), 1);
+      for (const ox of [s * 0.2, s * 0.42]) { ctx.fillRect(ox, -s * 0.9, s * 0.12, s * 0.42); }
+      // faint window lights
+      const on = (p.hue > 0.4);
+      ctx.fillStyle = on ? U.rgba(U.hex2rgb(b.accent), 0.18) : "rgba(0,0,0,0.3)";
+      for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) {
+        if ((r + c + (p.hue * 10 | 0)) % 3 === 0) continue;
+        ctx.fillRect(-s * 0.5 + c * s * 0.28, -s * 0.4 + r * s * 0.28, s * 0.12, s * 0.14);
+      }
+      // slow drifting smoke from a chimney
+      if (Math.random() < 0.02) this.game.particles.smoke(p.x + s * 0.26, p.y - s * 0.9, 1, s * 0.2, "rgba(40,42,48,0.7)", -18);
     }
 
     renderOverlay(ctx, cam) {

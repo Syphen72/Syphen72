@@ -108,6 +108,7 @@
       <button class="btn" id="btnChassis">FORTRESS <span class="btn-tag" id="chassisTag">HEAVY</span></button>
       <button class="btn" id="btnHangar">HANGAR &amp; UNLOCKS</button>
       <button class="btn" id="btnHowto">HOW TO PLAY</button>
+      <button class="btn" id="btnSettings">SETTINGS</button>
     </div>
     <div class="menu-meta">
       <div class="meta-item"><span class="meta-label">CORES</span><span class="meta-val" id="metaCores">0</span></div>
@@ -181,8 +182,17 @@
     <div class="pause-stats" id="pauseStats"></div>
     <div class="menu-buttons">
       <button class="btn btn-primary" id="btnResume">RESUME</button>
+      <button class="btn" id="btnPauseSettings">SETTINGS</button>
       <button class="btn" id="btnAbandon">ABANDON RUN</button>
     </div>
+  </div>
+
+  <!-- ============ SETTINGS ============ -->
+  <div id="settingsScreen" class="overlay hidden">
+    <div class="panel-title">SETTINGS</div>
+    <div class="panel-sub">Audio, visuals &amp; accessibility. Changes apply instantly and are saved.</div>
+    <div class="settings-body" id="settingsBody"></div>
+    <button class="btn btn-back" id="btnSettingsBack">◀ BACK</button>
   </div>
 
   <!-- ============ GAME OVER / VICTORY ============ -->
@@ -196,6 +206,10 @@
     </div>
   </div>
 
+  <!-- Cinematic letterbox bars (boss fights) -->
+  <div id="letterTop" class="letterbox top"></div>
+  <div id="letterBot" class="letterbox bot"></div>
+
   <!-- Audio prompt -->
   <div id="clickHint" class="click-hint hidden">CLICK TO ENABLE AUDIO</div>
 </div>
@@ -206,6 +220,7 @@
 <script src="src/input.js"></script>
 <script src="src/camera.js"></script>
 <script src="src/particles.js"></script>
+<script src="src/lights.js"></script>
 <script src="src/data/weapons.js"></script>
 <script src="src/data/enemies.js"></script>
 <script src="src/data/upgrades.js"></script>
