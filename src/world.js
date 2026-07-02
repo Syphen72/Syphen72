@@ -137,6 +137,7 @@
       const g = this.game, f = g.fortress;
       const hz = this.biome.hazard;
       g.ui.banner(this._hazardName(hz), "ENVIRONMENTAL HAZARD", 1.6);
+      g.caption("[ Environmental hazard: " + this._hazardName(hz) + " ]");
       if (hz === "meteor") {
         const n = 5;
         for (let i = 0; i < n; i++) {

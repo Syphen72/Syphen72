@@ -1,29 +1,54 @@
 /* ============================================================
-   input.js — keyboard + mouse. Tracks held keys, mouse world pos,
-   edge-triggered "pressed" events.
+   input.js — keyboard + mouse with rebindable "actions".
+   Actions (up/down/left/right/ability/boost/tactical/pause) map to
+   one or more keys; bindings are user-configurable and persisted.
+   Raw key edges (onKey) remain for fixed keys like 1/2/3.
    ============================================================ */
 (function () {
   const MF = (window.MF = window.MF || {});
+
+  const DEFAULT_BINDINGS = {
+    up: ["w", "arrowup"], down: ["s", "arrowdown"],
+    left: ["a", "arrowleft"], right: ["d", "arrowright"],
+    ability: [" "], boost: ["shift"], tactical: ["tab"], pause: ["escape", "p"],
+  };
+  // actions that always preventDefault so the browser doesn't steal them
+  const PREVENT = new Set(["tab", " ", "arrowup", "arrowdown", "arrowleft", "arrowright"]);
 
   class Input {
     constructor(canvas) {
       this.canvas = canvas;
       this.keys = {};
-      this.pressed = {};       // edge this frame
-      this.mouse = { x: 0, y: 0, sx: 0, sy: 0 }; // world + screen
-      this.mDown = false;      // left
-      this.rDown = false;      // right
-      this.mPressed = false;
-      this.rPressed = false;
+      this.pressed = {};       // raw key edge this frame
+      this.mouse = { x: 0, y: 0, sx: 0, sy: 0 };
+      this.mDown = false; this.rDown = false;
+      this.mPressed = false; this.rPressed = false;
       this.wheel = 0;
       this._onKey = {};
+      this._onAction = {};
+      this.bindings = JSON.parse(JSON.stringify(DEFAULT_BINDINGS));
+      this._rebind = null;     // {action, cb} while capturing a new key
 
       addEventListener("keydown", (e) => {
         const k = e.key.toLowerCase();
-        if (!this.keys[k]) this.pressed[k] = true;
+        // capture mode for rebinding
+        if (this._rebind) {
+          e.preventDefault();
+          if (k !== "escape") this._applyRebind(k);
+          else this._cancelRebind();
+          return;
+        }
+        const wasDown = this.keys[k];
+        if (!wasDown) this.pressed[k] = true;
         this.keys[k] = true;
-        if (["tab", " ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
-        if (this._onKey[k]) this._onKey[k].forEach((f) => f());
+        if (PREVENT.has(k)) e.preventDefault();
+        if (!wasDown && this._onKey[k]) this._onKey[k].forEach((f) => f());
+        // fire action callbacks on fresh press
+        if (!wasDown) {
+          for (const act in this.bindings) {
+            if (this.bindings[act].includes(k) && this._onAction[act]) this._onAction[act].forEach((f) => f());
+          }
+        }
       });
       addEventListener("keyup", (e) => { this.keys[e.key.toLowerCase()] = false; });
 
@@ -42,35 +67,53 @@
       });
       canvas.addEventListener("contextmenu", (e) => e.preventDefault());
       canvas.addEventListener("wheel", (e) => { this.wheel += e.deltaY; e.preventDefault(); }, { passive: false });
-
-      // lose focus safety
       addEventListener("blur", () => { this.keys = {}; this.mDown = this.rDown = false; });
     }
 
-    onKey(k, fn) {
-      k = k.toLowerCase();
-      (this._onKey[k] = this._onKey[k] || []).push(fn);
+    // ---- bindings ----
+    setBindings(map) { if (map) this.bindings = JSON.parse(JSON.stringify(map)); }
+    resetBindings() { this.bindings = JSON.parse(JSON.stringify(DEFAULT_BINDINGS)); return this.bindings; }
+    startRebind(action, cb) { this._rebind = { action, cb }; }
+    isRebinding() { return !!this._rebind; }
+    _applyRebind(k) {
+      const act = this._rebind.action;
+      // remove this key from any other action to avoid conflicts
+      for (const a in this.bindings) this.bindings[a] = this.bindings[a].filter((x) => x !== k);
+      this.bindings[act] = [k];
+      const cb = this._rebind.cb; this._rebind = null;
+      if (cb) cb(k, this.bindings);
+    }
+    _cancelRebind() { const cb = this._rebind.cb; this._rebind = null; if (cb) cb(null, this.bindings); }
+
+    // ---- action queries ----
+    onKey(k, fn) { k = k.toLowerCase(); (this._onKey[k] = this._onKey[k] || []).push(fn); }
+    onAction(action, fn) { (this._onAction[action] = this._onAction[action] || []).push(fn); }
+    actionDown(action) {
+      const keys = this.bindings[action]; if (!keys) return false;
+      for (const k of keys) if (this.keys[k]) return true;
+      return false;
     }
 
-    // call at end of frame
-    endFrame() {
-      this.pressed = {};
-      this.mPressed = this.rPressed = false;
-      this.wheel = 0;
-    }
-
+    endFrame() { this.pressed = {}; this.mPressed = this.rPressed = false; this.wheel = 0; }
     keyPressed(k) { return !!this.pressed[k.toLowerCase()]; }
     key(k) { return !!this.keys[k.toLowerCase()]; }
 
-    // movement vector from WASD (normalized)
     moveVec() {
       let x = 0, y = 0;
-      if (this.keys["w"] || this.keys["arrowup"]) y -= 1;
-      if (this.keys["s"] || this.keys["arrowdown"]) y += 1;
-      if (this.keys["a"] || this.keys["arrowleft"]) x -= 1;
-      if (this.keys["d"] || this.keys["arrowright"]) x += 1;
+      if (this.actionDown("up")) y -= 1;
+      if (this.actionDown("down")) y += 1;
+      if (this.actionDown("left")) x -= 1;
+      if (this.actionDown("right")) x += 1;
       if (x && y) { const inv = 0.70710678; x *= inv; y *= inv; }
       return { x, y };
+    }
+
+    // pretty label for a key string
+    static keyLabel(k) {
+      if (!k) return "—";
+      const map = { " ": "SPACE", arrowup: "↑", arrowdown: "↓", arrowleft: "←", arrowright: "→",
+        escape: "ESC", control: "CTRL", shift: "SHIFT", alt: "ALT", tab: "TAB", enter: "ENTER" };
+      return map[k] || k.toUpperCase();
     }
   }
 

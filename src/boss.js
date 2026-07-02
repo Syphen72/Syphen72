@@ -45,6 +45,11 @@
       this.corePulse = 0;
       this.spawnedAdds = 0;
       this.shakeAccum = 0;
+      // ablative armour belt — plates shear off as the boss takes damage
+      this.plateCount = 10;
+      this.plates = [];
+      for (let i = 0; i < this.plateCount; i++) this.plates.push({ a: i / this.plateCount * U.TAU, alive: true });
+      this.brokenPlates = 0;
       game.audio.play("bossWarn", { vol: 1 });
     }
 
@@ -63,6 +68,9 @@
       this.hitFlash = 0.1;
       this.game.spawnDamageText(hit ? hit.x : this.x, (hit ? hit.y : this.y) - this.size * 0.5, applied, crit || (hit && hit.core));
       if (this.hp <= 0) { this.hp = 0; this._die(); return; }
+      // armour ablation — plates shear off as structural integrity drops
+      const targetBroken = Math.floor((1 - this.hp / this.maxHp) * this.plateCount);
+      while (this.brokenPlates < targetBroken) this._breakPlate(hit);
       // phase transition
       const th = this.phaseThresholds();
       const frac = this.hp / this.maxHp;
@@ -80,6 +88,51 @@
       this.game.camera.addShake(14);
       this.game.audio.play("bossWarn", { vol: 0.7 });
       this.atkTimer = 1.0;
+    }
+
+    _breakPlate(hit) {
+      // prefer the plate nearest the impact for a satisfying, directed shear
+      const alive = this.plates.filter((p) => p.alive);
+      if (!alive.length) return;
+      let p = alive[0];
+      if (hit) {
+        const ha = Math.atan2(hit.y - this.y, hit.x - this.x) - this.angle;
+        let best = 1e9;
+        for (const pl of alive) { const d = Math.abs(U.angDiff(pl.a, ha)); if (d < best) { best = d; p = pl; } }
+      } else { p = alive[(Math.random() * alive.length) | 0]; }
+      p.alive = false; this.brokenPlates++;
+      const g = this.game;
+      const r = this.size * 0.92;
+      const wx = this.x + Math.cos(this.angle + p.a) * r;
+      const wy = this.y + Math.sin(this.angle + p.a) * r;
+      g.particles.debris(wx, wy, 6, "#3a414d", 240);
+      g.particles.spark(wx, wy, this.angle + p.a, 0.8, 7, 280, "#ffd07a", 2.4);
+      g.particles.smoke(wx, wy, 3, this.size * 0.3, "rgba(30,32,38,0.9)", -18);
+      g.particles.glow(wx, wy, this.size * 0.5, this.accent, 0.3);
+      if (g.lights) g.lights.flash(wx, wy, this.size, this.accent, 0.2);
+      g.audio.play("hit", { vol: 0.7 });
+      g.camera.addShake(3);
+      g.wrecks.push(new PlateChunk(g, wx, wy, this.angle + p.a, this.size * 0.42, this.accent));
+    }
+
+    _drawArmor(ctx) {
+      const n = this.plateCount, R = this.size * 0.92, w = this.size * 0.2;
+      const span = Math.PI / n * 0.82;
+      for (let i = 0; i < n; i++) {
+        const p = this.plates[i];
+        const a0 = p.a - span, a1 = p.a + span;
+        if (p.alive) {
+          ctx.beginPath(); ctx.arc(0, 0, R, a0, a1); ctx.lineWidth = w; ctx.strokeStyle = "#39404c"; ctx.stroke();
+          ctx.beginPath(); ctx.arc(0, 0, R, a0, a1); ctx.lineWidth = w * 0.34; ctx.strokeStyle = "#4a5563"; ctx.stroke();
+        } else {
+          // exposed, glowing internal machinery in the gap
+          ctx.save(); ctx.globalCompositeOperation = "lighter";
+          const pulse = 0.45 + Math.sin(this.corePulse * 4 + i) * 0.22;
+          ctx.beginPath(); ctx.arc(0, 0, R, a0, a1); ctx.lineWidth = w * 1.15;
+          ctx.strokeStyle = U.rgba(U.hex2rgb(this.accent), pulse); ctx.stroke();
+          ctx.restore();
+        }
+      }
     }
 
     hitTest(x, y, r) {
@@ -334,6 +387,7 @@
       ctx.translate(this.x, this.y); ctx.rotate(this.angle);
       const art = MF.BossArt[this.type] || MF.BossArt.spider;
       art(ctx, this);
+      this._drawArmor(ctx);
       ctx.restore();
 
       // invuln shield shimmer
@@ -346,6 +400,41 @@
         ctx.save(); ctx.globalAlpha = this.hitFlash * 4; ctx.globalCompositeOperation = "lighter";
         ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, U.TAU); ctx.fill(); ctx.restore();
       }
+    }
+  }
+
+  // A sheared-off armour plate tumbling away from the boss.
+  class PlateChunk {
+    constructor(g, x, y, ang, size, color) {
+      this.game = g; this.x = x; this.y = y;
+      const a = ang + U.rand(-0.5, 0.5), sp = U.rand(140, 260);
+      this.vx = Math.cos(a) * sp; this.vy = Math.sin(a) * sp;
+      this.rot = ang; this.vr = U.rand(-9, 9);
+      this.size = size; this.color = color;
+      this.life = 0; this.maxLife = U.rand(0.8, 1.2);
+      this.z = 0; this.vz = U.rand(140, 240); this.dead = false;
+    }
+    update(dt) {
+      this.life += dt;
+      if (this.life >= this.maxLife) { this.dead = true; return; }
+      this.x += this.vx * dt; this.y += this.vy * dt;
+      this.vx *= Math.pow(0.25, dt); this.vy *= Math.pow(0.25, dt);
+      this.rot += this.vr * dt;
+      this.z += this.vz * dt; this.vz -= 520 * dt;
+      if (this.z < 0) { this.z = 0; this.vz *= -0.35; this.vr *= 0.6; }
+      if (Math.random() < 0.25) this.game.particles.smoke(this.x, this.y - this.z, 1, this.size * 0.3, "rgba(35,35,42,0.7)", -8);
+    }
+    render(ctx) {
+      const k = this.life / this.maxLife;
+      ctx.save();
+      ctx.globalAlpha = 1 - k * k;
+      ctx.translate(this.x, this.y - this.z); ctx.rotate(this.rot);
+      ctx.fillStyle = "#39404c"; ctx.strokeStyle = "#20242c"; ctx.lineWidth = 2;
+      U.roundRect(ctx, -this.size * 0.6, -this.size * 0.34, this.size * 1.2, this.size * 0.68, 3);
+      ctx.fill(); ctx.stroke();
+      ctx.globalAlpha = (1 - k) * 0.6; ctx.strokeStyle = this.color; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(-this.size * 0.55, -this.size * 0.34); ctx.lineTo(this.size * 0.55, -this.size * 0.34); ctx.stroke();
+      ctx.restore();
     }
   }
 

@@ -35,6 +35,7 @@
       this.drones = [];
       this.scraps = [];
       this.orbitals = [];
+      this.wrecks = [];
       this.boss = null;
 
       this.scrap = 0;
@@ -63,10 +64,9 @@
     }
 
     _bind() {
-      this.input.onKey("escape", () => { if (this.state === STATE.PLAYING) this.pause(); else if (this.state === STATE.PAUSED) this.resume(); });
-      this.input.onKey("p", () => { if (this.state === STATE.PLAYING) this.pause(); else if (this.state === STATE.PAUSED) this.resume(); });
-      this.input.onKey(" ", () => { if (this.state === STATE.PLAYING && this.fortress) this.fortress.triggerAbility(); });
-      this.input.onKey("shift", () => { if (this.state === STATE.PLAYING && this.fortress) this.fortress.triggerBoost(); });
+      this.input.onAction("pause", () => { if (this.state === STATE.PLAYING) this.pause(); else if (this.state === STATE.PAUSED) this.resume(); });
+      this.input.onAction("ability", () => { if (this.state === STATE.PLAYING && this.fortress) this.fortress.triggerAbility(); });
+      this.input.onAction("boost", () => { if (this.state === STATE.PLAYING && this.fortress) this.fortress.triggerBoost(); });
       for (const k of ["1", "2", "3", "4"]) this.input.onKey(k, () => { if (this.state === STATE.UPGRADE) this.ui.pickCard(parseInt(k) - 1); });
     }
 
@@ -85,7 +85,7 @@
       f.stats.powerRegen *= meta.powerRegen;
       f.stats.scrapMult *= meta.scrapMult;
 
-      this.enemies.length = 0; this.drones.length = 0; this.scraps.length = 0; this.orbitals.length = 0;
+      this.enemies.length = 0; this.drones.length = 0; this.scraps.length = 0; this.orbitals.length = 0; this.wrecks.length = 0;
       this.boss = null; this.projectiles.clear(); this.particles.clear();
       this.director.reset(); this.upgrades.reset();
       this.scrap = meta.startScrap || 0; this.combo = 0; this.comboTimer = 0; this.score = 0;
@@ -116,6 +116,7 @@
       if (r.type === "wave") {
         this.director.waveStartTotal = this._estimateWaveCount();
         this.ui.banner("WAVE " + r.wave, r.waveInBiome + " / " + r.total, 1.4);
+        this.caption("[ Wave " + r.wave + " — hostiles inbound ]");
         this.stats.wave = this.director.globalWave;
         this.save.data.stats.bestWave = Math.max(this.save.data.stats.bestWave, this.director.globalWave);
       }
@@ -139,6 +140,7 @@
     chooseUpgrade(u) {
       this.upgrades.apply(u);
       this.audio.play("upgrade", { vol: 0.7 });
+      this.caption("[ Module installed: " + u.name + " ]");
       this.ui.toast(u.name, u.type);
       this.ui.updateModules();
       this.afterUpgrade();
@@ -158,6 +160,7 @@
       this.ui.setLetterbox(true);
       this._bossCineT = 2.2;   // cinematic intro focus timer
       this.ui.banner("WARNING", "BOSS APPROACHING", 2.2);
+      this.caption("[ ⚠ Warning siren — a boss approaches ]");
       this.audio.duckForBoss();
       this.audio.setIntensity(1);
       this.camera.addShake(6);
@@ -165,6 +168,7 @@
     onBossPhase(boss, phase) {
       this.ui.bossPhase("PHASE " + phase + " — WEAK POINT EXPOSED");
       this.ui.banner("PHASE " + phase, "", 1.2);
+      this.caption("[ Boss powers up — phase " + phase + ", weak point exposed ]");
     }
     onBossKilled(boss) {
       this.stats.bossKills++;
@@ -178,6 +182,7 @@
       const cores = 30 + this.director.biomeIndex * 10;
       this.pendingCores = (this.pendingCores || 0) + cores;
       this.ui.banner("BIOME CLEARED", "+" + cores + " CORES", 2.4);
+      this.caption("[ Boss destroyed — biome cleared ]");
       this.audio.play("upgrade", { vol: 1 });
     }
     _finishBoss() {
@@ -324,6 +329,7 @@
       this.particles.explosion(this.fortress.x, this.fortress.y, 90, "#fff2c0", "#2a2d33");
       this.audio.play("explosion", { vol: 1, big: 1.6 });
       this.audio.stopMusic();
+      this.caption("[ Fortress destroyed ]");
       setTimeout(() => this.endRun(false), 1200);
     }
 
@@ -337,12 +343,16 @@
       this.save.addCores(cores);
       this.save.recordRun({ wave: this.director.globalWave, kills: this.stats.kills, bossKills: this.stats.bossKills, biome: this.director.biomeIndex });
       this.ui.showEnd(victory, { ...this.stats, cores, wave: this.director.globalWave, scrap: this.scrap, time: this.runTime });
+      this.caption(victory ? "[ Victory fanfare — wasteland conquered ]" : "[ Run over — return to hangar ]");
       this.targetTimeScale = 1;
     }
+
+    caption(text) { if (this.settings.subtitles) this.ui.caption(text); }
 
     applySettings() {
       const s = this.settings = this.save.settings;
       this.audio.applyMix(s.master, s.sfx, s.music);
+      if (s.keybinds) this.input.setBindings(s.keybinds);
       this.camera.shakeScale = s.shake;
       this.lights.flashesEnabled = s.flashes;
       document.body.classList.toggle("high-contrast", !!s.highContrast);
@@ -396,6 +406,10 @@
       // remove dead
       for (let i = this.enemies.length - 1; i >= 0; i--) if (this.enemies[i].dead) this.enemies.splice(i, 1);
 
+      // wrecks (dying enemy husks)
+      for (const w of this.wrecks) w.update(sdt);
+      for (let i = this.wrecks.length - 1; i >= 0; i--) if (this.wrecks[i].dead) this.wrecks.splice(i, 1);
+
       // drones
       for (const d of this.drones) d.update(sdt);
       for (let i = this.drones.length - 1; i >= 0; i--) { const d = this.drones[i]; d.life -= sdt; if (d.dead || d.life <= 0) this.drones.splice(i, 1); }
@@ -419,6 +433,11 @@
       // combo timer
       if (this.comboTimer > 0) { this.comboTimer -= sdt; if (this.comboTimer <= 0) { this.combo = 0; this.ui.hideCombo(); } }
 
+      // low-hull caption (fires once per dip below 25%)
+      const hullFrac = f.hull / f.stats.maxHull;
+      if (hullFrac < 0.25 && !this._lowHullWarned) { this._lowHullWarned = true; this.caption("[ ⚠ Hull integrity critical ]"); }
+      else if (hullFrac > 0.4) this._lowHullWarned = false;
+
       // wave clear detection
       if (!this.boss && !this.pendingBoss && this.director.isWaveCleared() && this._nextWaveTimer == null) {
         // is next a boss?
@@ -436,7 +455,7 @@
       const al = Math.hypot(aimx, aimy) || 1;
       const moveMag = Math.hypot(f.vx, f.vy) / (f.stats.moveSpeed || 200);
       // TAB tactical zoom + boss cinematic focus
-      const tab = this.input.key("tab");
+      const tab = this.input.actionDown("tactical");
       if (this._bossCineT > 0 && this.boss) {
         this._bossCineT -= rawDt;
         const bx = (f.x + this.boss.x) / 2, by = (f.y + this.boss.y) / 2;
@@ -485,6 +504,9 @@
 
       // orbitals reticles (under entities)
       for (const o of this.orbitals) o.render(ctx);
+
+      // wrecks (collapsing husks) beneath living enemies
+      for (const w of this.wrecks) if (cam.visible(w.x, w.y, w.size + 30)) w.render(ctx);
 
       // enemies
       for (const e of this.enemies) if (cam.visible(e.x, e.y, e.size + 30)) e.render(ctx);

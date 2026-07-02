@@ -6,6 +6,66 @@
   const U = MF.U;
   let ENEMY_ID = 1;
 
+  // which destruction animation each class uses
+  const DEATH_STYLE = {
+    scout: "shatter", swarm: "shatter",
+    tank: "hulk", walker: "hulk", artillery: "hulk",
+    hover: "crash", bomber: "crash",
+    suicide: "detonate",
+    shield: "shielded",
+    repair: "leak",
+    sniper: "snap",
+    brute: "rupture",
+  };
+
+  // A collapsing husk of a destroyed enemy — draws its silhouette charring,
+  // tumbling and sinking (or crashing, for flyers) before it fades.
+  class Wreck {
+    constructor(game, e, opt) {
+      this.game = game; this.shape = e.def.shape;
+      this.color = e.color; this.accent = e.accent; this.size = e.size;
+      this.x = e.x; this.y = e.y; this.angle = e.angle;
+      this.vx = e.vx * 0.25 + U.rand(-20, 20); this.vy = e.vy * 0.25 + U.rand(-20, 20);
+      this.vr = opt.vr != null ? opt.vr : U.rand(-2, 2);
+      this.life = 0; this.maxLife = opt.maxLife || 0.6;
+      this.sink = !!opt.sink; this.crash = !!opt.crash; this.chunk = !!opt.chunk;
+      this.z = 0; this.vz = opt.vz || 0;
+      this.dead = false;
+      if (this.chunk) { const a = U.rand(0, U.TAU), sp = U.rand(120, 240); this.vx = Math.cos(a) * sp; this.vy = Math.sin(a) * sp; this.size *= 0.5; }
+    }
+    update(dt) {
+      this.life += dt;
+      if (this.life >= this.maxLife) { this.dead = true; return; }
+      this.x += this.vx * dt; this.y += this.vy * dt;
+      this.vx *= Math.pow(0.06, dt); this.vy *= Math.pow(0.06, dt);
+      this.angle += this.vr * dt;
+      if (this.crash || this.chunk) {
+        this.z += this.vz * dt; this.vz -= 520 * dt;
+        if (this.z < 0) {
+          this.z = 0; this.vz = 0;
+          if (this.crash && !this._burst) { this._burst = true; this.game.particles.explosion(this.x, this.y, this.size * 1.2, "#ffb347", "#2a2d33"); this.game.audio.play("explosion", { vol: 0.5, big: 0.7 }); this.maxLife = Math.min(this.maxLife, this.life + 0.15); }
+        }
+      }
+      if (Math.random() < 0.3) this.game.particles.smoke(this.x, this.y - this.z, 1, this.size * 0.3, "rgba(35,35,42,0.8)", -12);
+    }
+    render(ctx) {
+      const k = this.life / this.maxLife;
+      const scale = (this.sink ? 1 - k * 0.4 : 1 - k * 0.15) * (this.chunk ? 0.8 : 1);
+      ctx.save();
+      ctx.globalAlpha = 1 - k * k;
+      ctx.translate(this.x, this.y - this.z);
+      ctx.rotate(this.angle);
+      ctx.scale(scale, scale);
+      const stub = { size: this.size, color: this.color, accent: this.accent, walkPhase: 0, state: 0, game: this.game, shielded: 0 };
+      (MF.EnemyArt[this.shape] || MF.EnemyArt.dart)(ctx, stub);
+      // char the silhouette over its lifetime
+      ctx.globalCompositeOperation = "source-atop";
+      ctx.fillStyle = `rgba(18,14,11,${0.2 + k * 0.7})`;
+      ctx.fillRect(-this.size * 2.4, -this.size * 2.4, this.size * 4.8, this.size * 4.8);
+      ctx.restore();
+    }
+  }
+
   class Enemy {
     constructor(game, key, x, y, scale) {
       const d = MF.ENEMIES[key];
@@ -48,13 +108,78 @@
       if (this.dead || this.dying) return;
       this.dying = true; this.dead = true;
       const g = this.game;
-      const big = this.size / 10;
-      g.particles.explosion(this.x, this.y, this.size * 1.4, "#ffb347", "#2a2d33");
-      g.particles.debris(this.x, this.y, 4 + big * 2, U.rgba(U.shade(U.hex2rgb(this.color), 0.7), 1), this.size * 6);
-      g.audio.play("explosion", { vol: U.clamp(0.3 + big * 0.1, 0.3, 0.7), big: U.clamp(big * 0.5, 0.4, 1) });
+      const dcol = U.shade(U.hex2rgb(this.color), 0.7);
+      this._deathFx(g, dcol);
       g.camera.addShake(U.clamp(this.size / 8, 1, 4));
       if (this.def.boom) g.explodeAt(this.x, this.y, this.def.blastR, this.def.damage * this.dmgMult, "enemy", null);
       g.onEnemyKilled(this);
+    }
+
+    // ---- bespoke destruction per enemy class ----
+    _deathFx(g, dcol) {
+      const s = this.size, x = this.x, y = this.y;
+      const style = DEATH_STYLE[this.key] || "shatter";
+      const husk = (opt) => { const w = new Wreck(g, this, opt || {}); g.wrecks.push(w); return w; };
+      switch (style) {
+        case "shatter": // light darts: sharp crack, shards, no big smoke
+          g.particles.spark(x, y, 0, Math.PI, 8, s * 12, this.accent || "#ffd07a", 2.2);
+          g.particles.debris(x, y, 5, U.rgba(dcol, 1), s * 8);
+          g.particles.glow(x, y, s * 1.4, "#fff2c0", 0.14);
+          g.audio.play("hit", { vol: 0.5 });
+          husk();
+          break;
+        case "hulk": // armored: turret pops off, hull collapses w/ smoke column
+          g.particles.explosion(x, y, s * 1.3, "#ffb347", "#22252b");
+          g.particles.smoke(x, y, 6, s * 0.8, "rgba(30,32,38,0.95)", -40);
+          g.particles.debris(x, y, 8, U.rgba(dcol, 1), s * 6);
+          husk({ vr: U.rand(-2, 2), maxLife: 0.9, sink: true });
+          // ejected turret chunk
+          husk({ chunk: true, vr: U.rand(-9, 9), maxLife: 0.8, vz: 220 });
+          g.audio.play("explosion", { vol: 0.6, big: 0.9 });
+          setTimeout(() => { if (g.state === "playing") { g.particles.explosion(x + U.rand(-s, s), y + U.rand(-s, s), s * 0.7, "#ffd08a", "#2a2d33"); } }, 140);
+          break;
+        case "crash": // flying: spins down, crashes, then bursts
+          husk({ crash: true, vr: U.rand(6, 12), maxLife: 0.75, vz: 60 });
+          g.particles.smoke(x, y, 4, s * 0.5, "rgba(40,42,50,0.9)", 20);
+          g.audio.play("hurt", { vol: 0.4 });
+          break;
+        case "detonate": // suicide: it IS the explosion
+          g.particles.explosion(x, y, s * 2.0, "#ff5a3c", "#2a2d33");
+          g.particles.ring(x, y, s * 3, "#ff8a3c", 0.5, 5);
+          g.audio.play("explosion", { vol: 0.75, big: 1.1 });
+          break;
+        case "shielded": // carrier: shield shatters into blue shards, then core blows
+          g.particles.ring(x, y, s * 1.8, "#7be3ff", 0.4, 4);
+          for (let i = 0; i < 10; i++) { const a = U.rand(0, U.TAU); g.particles.spark(x, y, a, 0.3, 1, s * 10, "#7be3ff", 2.4); }
+          g.particles.explosion(x, y, s * 1.2, "#bfe8ff", "#2a2d33");
+          husk({ maxLife: 0.7 });
+          g.audio.play("shieldHit", { vol: 0.6 });
+          break;
+        case "leak": // repair rig: green fluid burst + fizzle
+          for (let i = 0; i < 8; i++) g.particles.fire(x + U.rand(-6, 6), y + U.rand(-6, 6), 1, s * 0.4, "#4dffb0");
+          g.particles.smoke(x, y, 4, s * 0.5, "rgba(40,90,60,0.8)", -20);
+          g.particles.debris(x, y, 5, U.rgba(dcol, 1), s * 6);
+          husk({ maxLife: 0.7 });
+          g.audio.play("explosion", { vol: 0.4, big: 0.5 });
+          break;
+        case "snap": // sniper: implode then a single long spark
+          g.particles.glow(x, y, s * 1.6, "#ffdf6b", 0.16);
+          g.particles.spark(x, y, this.angle, 0.05, 2, s * 20, "#ffdf6b", 2.6);
+          g.particles.debris(x, y, 4, U.rgba(dcol, 1), s * 5);
+          husk({ maxLife: 0.6 });
+          g.audio.play("railgun", { vol: 0.35 });
+          break;
+        case "rupture": // brute: violent multi-blast + big chunks
+          g.particles.explosion(x, y, s * 1.8, "#ff6a3c", "#22252b");
+          g.particles.debris(x, y, 12, U.rgba(dcol, 1), s * 8);
+          husk({ vr: U.rand(-3, 3), maxLife: 1.0, sink: true });
+          g.audio.play("explosion", { vol: 0.8, big: 1.2 });
+          for (let k = 1; k <= 2; k++) setTimeout(() => { if (g.state === "playing") g.particles.explosion(x + U.rand(-s, s), y + U.rand(-s, s), s * 0.8, "#ffd08a", "#2a2d33"); }, k * 120);
+          break;
+        default:
+          g.particles.explosion(x, y, s * 1.3, "#ffb347", "#2a2d33");
+          husk();
+      }
     }
 
     applyStatus(dt) {
@@ -351,4 +476,5 @@
 
   MF.Enemy = Enemy;
   MF.Drone = Drone;
+  MF.Wreck = Wreck;
 })();

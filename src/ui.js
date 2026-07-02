@@ -143,6 +143,12 @@
       document.getElementById("letterTop").classList.toggle("show", on);
       document.getElementById("letterBot").classList.toggle("show", on);
     }
+    caption(text) {
+      const el = document.getElementById("captionBar");
+      el.textContent = text; el.classList.add("show");
+      clearTimeout(this._capT);
+      this._capT = setTimeout(() => el.classList.remove("show"), 2600);
+    }
 
     // ============== upgrade cards ==============
     showUpgrades(choices) {
@@ -334,7 +340,46 @@
       options("colorblind", "Colorblind Aid", [
         { v: "off", l: "Off" }, { v: "outline", l: "Outlines" },
       ]);
+      toggle("subtitles", "Subtitles / Captions", "Text cues for key audio events");
       slider("uiScale", "UI Scale", 0.85, 1.25, 0.05, pct);
+
+      // ---- controls ----
+      header("CONTROLS");
+      const fixedRow = (label, val) => {
+        const row = document.createElement("div"); row.className = "set-row";
+        row.innerHTML = `<label>${label}</label><span class="key-cap fixed">${val}</span>`;
+        body.appendChild(row);
+      };
+      fixedRow("Aim", "MOUSE");
+      fixedRow("Fire Primary", "LMB");
+      fixedRow("Fire Secondary", "RMB");
+      const relabel = (a) => (s.keybinds[a] || []).map((k) => MF.Input.keyLabel(k)).join(" / ") || "—";
+      const bindRow = (action, label) => {
+        const row = document.createElement("div"); row.className = "set-row";
+        row.innerHTML = `<label>${label}</label><button class="key-cap rebind">${relabel(action)}</button>`;
+        const btn = row.querySelector("button");
+        btn.addEventListener("click", () => {
+          if (g.input.isRebinding()) return;
+          btn.textContent = "PRESS A KEY…"; btn.classList.add("listening");
+          g.input.startRebind(action, (k, binds) => {
+            btn.classList.remove("listening");
+            if (k) { g.save.setSetting("keybinds", JSON.parse(JSON.stringify(binds))); g.applySettings(); }
+            btn.textContent = relabel(action);
+            g.audio.play("ui", { vol: 0.4 });
+          });
+        });
+        body.appendChild(row);
+      };
+      [["up", "Move Up"], ["down", "Move Down"], ["left", "Move Left"], ["right", "Move Right"],
+       ["ability", "Overshield"], ["boost", "Boost"], ["tactical", "Tactical View"], ["pause", "Pause"]]
+        .forEach(([a, l]) => bindRow(a, l));
+      const resetRow = document.createElement("div"); resetRow.className = "set-row";
+      resetRow.innerHTML = `<label>Reset Controls<span class="set-sub">Restore default key bindings</span></label><button class="seg" id="resetBinds">RESET</button>`;
+      resetRow.querySelector("#resetBinds").addEventListener("click", () => {
+        const bd = g.input.resetBindings(); g.save.setSetting("keybinds", JSON.parse(JSON.stringify(bd)));
+        g.applySettings(); g.audio.play("ui", { vol: 0.4 }); this.showSettings(this._settingsReturn);
+      });
+      body.appendChild(resetRow);
 
       this.hideAllOverlays();
       document.getElementById("settingsScreen").classList.remove("hidden");

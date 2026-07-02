@@ -31,6 +31,12 @@
           master: 0.9, sfx: 1.0, music: 0.8,
           shake: 1.0, flashes: true, damageNumbers: true,
           highContrast: false, colorblind: "off", uiScale: 1.0,
+          subtitles: false,
+          keybinds: {
+            up: ["w", "arrowup"], down: ["s", "arrowdown"],
+            left: ["a", "arrowleft"], right: ["d", "arrowright"],
+            ability: [" "], boost: ["shift"], tactical: ["tab"], pause: ["escape", "p"],
+          },
         },
       };
     }
