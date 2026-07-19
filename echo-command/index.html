@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>ECHO COMMAND</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='34' fill='none' stroke='%2353e8ff' stroke-width='8'/><circle cx='50' cy='50' r='14' fill='%23ff7a1a'/></svg>">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="vignette"></div>
+<div id="hurt-flash"></div>
+<div id="loopwipe"><div id="loopwipe-inner">
+  <div id="loopwipe-kicker">TIMELINE RESET</div>
+  <div id="loopwipe-text">LOOP 2</div>
+</div></div>
+
+<div id="ui">
+
+  <!-- ================= HUD ================= -->
+  <div id="hud" hidden>
+    <div id="hud-top">
+      <div id="objectives" class="hud-card"></div>
+      <div id="timer-wrap">
+        <div id="loop-label">LOOP 1</div>
+        <div id="timer-bar"><div id="timer-fill"></div></div>
+        <div id="timer-text">1:00</div>
+      </div>
+      <div id="mission-tag" class="hud-card right">
+        <div id="mission-name">REACTOR PURGE</div>
+        <div id="mission-desig">SIGMA-1A</div>
+      </div>
+    </div>
+    <div id="timeline"></div>
+    <div id="hud-bottom">
+      <div id="hp-wrap">
+        <div class="bar-label">HULL</div>
+        <div id="hp-bar"><div id="hp-fill"></div></div>
+      </div>
+      <div id="loadout-hud">
+        <div class="slot" id="slot-weapon">
+          <div class="slot-key">LMB</div>
+          <div class="slot-name" id="weapon-name">AR</div>
+        </div>
+        <div class="slot" id="slot-ab0">
+          <div class="cd-fill" id="cd0"></div>
+          <div class="slot-key">SPACE</div>
+          <div class="slot-name" id="ab0-name">—</div>
+        </div>
+        <div class="slot" id="slot-ab1">
+          <div class="cd-fill" id="cd1"></div>
+          <div class="slot-key">F</div>
+          <div class="slot-name" id="ab1-name">—</div>
+        </div>
+      </div>
+      <div id="reset-hint">HOLD <b>T</b> · RESET TIMELINE<div id="reset-charge"></div></div>
+    </div>
+  </div>
+
+  <!-- ================= TITLE ================= -->
+  <section class="panel center-panel" id="scr-title" hidden>
+    <div class="title-block">
+      <div class="title-kicker">TACTICAL CHRONO-OPERATIONS</div>
+      <h1 class="game-title">ECHO<span>COMMAND</span></h1>
+      <div class="title-sub">Every loop, another you joins the fight.</div>
+    </div>
+    <nav class="menu" id="title-menu">
+      <button class="menu-btn" data-act="new">NEW RUN</button>
+      <button class="menu-btn" data-act="continue" id="btn-continue">CONTINUE RUN</button>
+      <button class="menu-btn" data-act="endless" id="btn-endless">ENDLESS PROTOCOL</button>
+      <button class="menu-btn" data-act="help">FIELD MANUAL</button>
+      <button class="menu-btn" data-act="settings">SETTINGS</button>
+    </nav>
+    <div class="title-foot">
+      <span id="meta-stats"></span>
+    </div>
+  </section>
+
+  <!-- ================= SECTOR MAP ================= -->
+  <section class="panel full-panel" id="scr-sector" hidden>
+    <header class="panel-head">
+      <div>
+        <div class="panel-kicker">CAMPAIGN</div>
+        <h2 id="sector-name">SIGMA SECTOR</h2>
+      </div>
+      <div class="run-stats">
+        <div class="stat"><span class="stat-label">CREDITS</span><span id="run-credits">0</span></div>
+        <div class="stat"><span class="stat-label">INTEGRITY</span><span id="run-integrity">3</span></div>
+        <button class="ghost-btn" id="btn-abandon">ABANDON RUN</button>
+      </div>
+    </header>
+    <div id="sector-map-wrap"><svg id="sector-map"></svg></div>
+    <footer class="panel-foot" id="sector-hint">SELECT THE NEXT OPERATION</footer>
+  </section>
+
+  <!-- ================= DEPLOY ================= -->
+  <section class="panel center-panel" id="scr-deploy" hidden>
+    <header class="deploy-head">
+      <div class="panel-kicker" id="deploy-kicker">OPERATION</div>
+      <h2 id="deploy-title">REACTOR PURGE</h2>
+      <p id="deploy-brief" class="brief"></p>
+    </header>
+    <div id="echo-roster"></div>
+    <div class="pick-group">
+      <div class="pick-label">PRIMARY WEAPON</div>
+      <div class="pick-row" id="pick-weapons"></div>
+    </div>
+    <div class="pick-group">
+      <div class="pick-label">GADGETS — SELECT TWO</div>
+      <div class="pick-row" id="pick-abilities"></div>
+    </div>
+    <button class="cta" id="btn-deploy">DEPLOY COMMANDER</button>
+  </section>
+
+  <!-- ================= SHOP / LAB ================= -->
+  <section class="panel center-panel" id="scr-shop" hidden>
+    <header class="deploy-head">
+      <div class="panel-kicker" id="shop-kicker">REQUISITIONS</div>
+      <h2 id="shop-title">FIELD DEPOT</h2>
+      <div class="shop-credits">CREDITS <span id="shop-credits">0</span></div>
+    </header>
+    <div id="shop-cards"></div>
+    <button class="cta ghost" id="btn-shop-done">CONTINUE</button>
+  </section>
+
+  <!-- ================= RESULTS ================= -->
+  <section class="panel center-panel" id="scr-results" hidden>
+    <div class="panel-kicker" id="results-kicker">MISSION COMPLETE</div>
+    <h2 id="results-title">ALL OBJECTIVES SECURED</h2>
+    <div class="stats-grid" id="results-stats"></div>
+    <div class="btn-row">
+      <button class="cta" id="btn-results-continue">CONTINUE</button>
+      <button class="cta ghost" id="btn-replay">WATCH REPLAY</button>
+    </div>
+  </section>
+
+  <!-- ================= GAME OVER / VICTORY ================= -->
+  <section class="panel center-panel" id="scr-end" hidden>
+    <div class="panel-kicker" id="end-kicker">RUN TERMINATED</div>
+    <h2 id="end-title">COMMAND INTEGRITY LOST</h2>
+    <div class="stats-grid" id="end-stats"></div>
+    <div class="btn-row">
+      <button class="cta" id="btn-end-title">RETURN TO COMMAND</button>
+    </div>
+  </section>
+
+  <!-- ================= PAUSE ================= -->
+  <section class="panel center-panel narrow" id="scr-pause" hidden>
+    <div class="panel-kicker">STANDBY</div>
+    <h2>PAUSED</h2>
+    <nav class="menu">
+      <button class="menu-btn" data-act="resume">RESUME</button>
+      <button class="menu-btn" data-act="restart">RESTART MISSION</button>
+      <button class="menu-btn" data-act="settings">SETTINGS</button>
+      <button class="menu-btn" data-act="quit">ABANDON MISSION</button>
+    </nav>
+  </section>
+
+  <!-- ================= SETTINGS ================= -->
+  <section class="panel center-panel narrow" id="scr-settings" hidden>
+    <div class="panel-kicker">SYSTEMS</div>
+    <h2>SETTINGS</h2>
+    <div class="settings-rows">
+      <label class="set-row">GRAPHICS
+        <select id="set-gfx">
+          <option value="low">LOW</option><option value="medium">MEDIUM</option>
+          <option value="high">HIGH</option><option value="ultra">ULTRA</option>
+        </select>
+      </label>
+      <label class="set-row">MASTER VOLUME <input type="range" id="set-master" min="0" max="1" step="0.05"></label>
+      <label class="set-row">MUSIC <input type="range" id="set-music" min="0" max="1" step="0.05"></label>
+      <label class="set-row">EFFECTS <input type="range" id="set-sfx" min="0" max="1" step="0.05"></label>
+      <label class="set-row">UI SCALE <input type="range" id="set-uiscale" min="0.8" max="1.4" step="0.05"></label>
+      <label class="set-row">COLORBLIND PALETTE <input type="checkbox" id="set-cb"></label>
+      <label class="set-row">SCREEN SHAKE <input type="checkbox" id="set-shake"></label>
+      <label class="set-row">CAMERA SMOOTHING <input type="checkbox" id="set-camsmooth"></label>
+    </div>
+    <button class="cta ghost" id="btn-settings-back">BACK</button>
+  </section>
+
+  <!-- ================= HELP ================= -->
+  <section class="panel center-panel" id="scr-help" hidden>
+    <div class="panel-kicker">FIELD MANUAL</div>
+    <h2>HOW ECHO COMMAND WORKS</h2>
+    <div class="help-cols">
+      <div class="help-col">
+        <h3>THE LOOP</h3>
+        <p>Each mission runs on a fixed timer. When it expires the timeline resets — the arena, enemies, and objectives all restore. But your previous run is replayed perfectly by a holographic <b>Echo</b>. You are not correcting mistakes; you are building an army of your past selves.</p>
+        <h3>WINNING</h3>
+        <p>All objectives must be completed <b>within a single loop</b>. Split the work across timelines: this loop hacks Terminal A, the next covers Terminal B, the one after holds the door.</p>
+        <h3>ECHOES ARE FIXED</h3>
+        <p>Echoes repeat exactly what you did — every step, every shot, every miss. If an echo dies, it dies at that same moment in every future loop. Protect them.</p>
+      </div>
+      <div class="help-col">
+        <h3>CONTROLS</h3>
+        <ul class="controls-list">
+          <li><b>W A S D</b> Move</li>
+          <li><b>MOUSE</b> Aim · <b>LMB</b> Fire</li>
+          <li><b>SHIFT</b> Sprint</li>
+          <li><b>SPACE / F</b> Gadgets</li>
+          <li><b>Q / E</b> Rotate camera · <b>WHEEL</b> Zoom</li>
+          <li><b>MMB DRAG</b> Free-look / tilt</li>
+          <li><b>T (hold)</b> Reset the timeline early</li>
+          <li><b>ESC</b> Pause</li>
+        </ul>
+        <h3>FRIENDLY FIRE</h3>
+        <p>Explosions damage <i>everything</i> — including your echoes. Choreograph accordingly.</p>
+      </div>
+    </div>
+    <button class="cta ghost" id="btn-help-back">BACK</button>
+  </section>
+
+  <!-- ================= REPLAY CONTROLS ================= -->
+  <div id="replay-bar" hidden>
+    <button class="rp-btn" id="rp-play">⏸</button>
+    <input type="range" id="rp-scrub" min="0" max="1000" value="0">
+    <span id="rp-time">0:00</span>
+    <div class="rp-speeds">
+      <button class="rp-btn rp-speed" data-s="0.25">¼×</button>
+      <button class="rp-btn rp-speed" data-s="0.5">½×</button>
+      <button class="rp-btn rp-speed active" data-s="1">1×</button>
+    </div>
+    <button class="rp-btn" id="rp-exit">EXIT</button>
+  </div>
+
+  <div id="toast"></div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three.module.js",
+    "three/addons/": "./vendor/addons/"
+  }
+}
+</script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
