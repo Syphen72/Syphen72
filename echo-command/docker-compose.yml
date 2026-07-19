@@ -10,7 +10,7 @@ services:
     container_name: echo-command
     restart: unless-stopped
     ports:
-      - "8090:80" # host port — change the left side if 8090 is taken
+      - "8346:80" # host port — change the left side if 8346 is taken
     volumes:
       - ./:/usr/share/nginx/html:ro
     healthcheck:
