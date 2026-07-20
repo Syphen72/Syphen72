@@ -1,0 +1,21 @@
+{
+  "name": "Example Mod — Gatling Nest & Glass Hornets",
+  "modules": [
+    {
+      "id": "gatling", "name": "Gatling Nest", "category": "weapons",
+      "desc": "A modded quad-rotary turret. Add \"example-mod.json\" to manifest.json to enable.",
+      "cost": { "ore": 55, "alloy": 5 }, "buildTime": 14, "hp": 115, "powerUse": 3, "priority": 8,
+      "weapon": { "kind": "bullet", "damage": 4, "rof": 5, "range": 40, "speed": 100, "targets": ["ground", "air"] },
+      "mesh": "autocannon", "hue": "#ffd27a"
+    }
+  ],
+  "enemies": [
+    {
+      "id": "glasshornet", "name": "Glass Hornet", "tier": 2,
+      "hp": 26, "speed": 12, "damage": 6, "attackRate": 0.6, "range": 3, "flying": true,
+      "pack": [5, 9], "score": 2.5, "scale": 0.8, "color": "#9adfff",
+      "reward": { "crystal": 2 },
+      "desc": "A modded swarm flier made of living crystal."
+    }
+  ]
+}

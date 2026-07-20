@@ -1,0 +1,20 @@
+{
+  "name": "leviathan-wake",
+  "private": true,
+  "version": "0.1.0",
+  "description": "A single-player strategy/action roguelite: command a massive walking fortress across a dying alien world.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@babylonjs/core": "^8.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vite": "^6.0.0"
+  }
+}

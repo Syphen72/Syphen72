@@ -1,0 +1,24 @@
+# LEVIATHAN WAKE — Dockge/Compose stack
+#
+# Clone this repo into your Dockge stacks directory (folder name must have no
+# spaces — compose project names forbid them), e.g. on a UGREEN NAS:
+#
+#   cd /volume1/docker
+#   git clone -b claude/leviathan-wake-design-tn1w4w https://github.com/Syphen72/Syphen72.git leviathan-wake
+#
+# Dockge will detect the "leviathan-wake" stack automatically if its stacks
+# dir is /volume1/docker. Start it and open http://<nas-ip>:8480
+# The game builds inside the image — no Node needed on the NAS.
+name: leviathan-wake
+
+services:
+  leviathan-wake:
+    container_name: leviathan-wake
+    build:
+      context: ./leviathan-wake
+    ports:
+      - "8480:80"          # change 8480 if it collides with another service
+    volumes:
+      # live-editable mods folder — drop JSON mods here, no rebuild needed
+      - ./leviathan-wake/public/mods:/usr/share/nginx/html/mods:ro
+    restart: unless-stopped
